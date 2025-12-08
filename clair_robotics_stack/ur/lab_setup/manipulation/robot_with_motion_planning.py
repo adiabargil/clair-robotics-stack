@@ -28,6 +28,23 @@ def to_valid_limits_config(config):
     return config
 
 
+def minimize_joint_distance(start_config, goal_config):
+    """
+    Adjusts the goal configuration by adding/subtracting 2pi to each joint
+    to minimize the distance to the start configuration.
+    """
+    new_goal = np.array(goal_config)
+    for i in range(len(start_config)):
+        diff = new_goal[i] - start_config[i]
+        while diff > np.pi:
+            new_goal[i] -= 2 * np.pi
+            diff = new_goal[i] - start_config[i]
+        while diff < -np.pi:
+            new_goal[i] += 2 * np.pi
+            diff = new_goal[i] - start_config[i]
+    return new_goal.tolist()
+
+
 class RobotInterfaceWithMP(RobotInterface):
     """
     Extension for the RobotInterfaceWithGripper with motion planning and geometry.
@@ -128,7 +145,7 @@ class RobotInterfaceWithMP(RobotInterface):
 
         return solution
 
-    def plan_and_moveJ(self, q, speed=None, acceleration=None, visualise=True):
+    def plan_and_moveJ(self, q, speed=None, acceleration=None, visualise=True, use_ur_planner=False):
         """
         Plan and move to a joint configuration.
         """
@@ -138,8 +155,17 @@ class RobotInterfaceWithMP(RobotInterface):
             acceleration = self.acceleration
 
         start_config = self.getActualQ()
+        
+        # Optimize global joint path to prevent "long way around" movements
+        # q = minimize_joint_distance(start_config, q)
 
         logging.info(f"{self.robot_name} planning and movingJ to {q} from {start_config}")
+        
+        if use_ur_planner:
+            logging.info(f"{self.robot_name} Using native UR planner (moveJ) directly.")
+            self.moveJ(q, speed=speed, acceleration=acceleration)
+            self.update_mp_with_current_config()
+            return True
 
         if visualise:
             self.motion_planner.vis_config(self.robot_name, q, vis_name="goal_config",
@@ -160,6 +186,9 @@ class RobotInterfaceWithMP(RobotInterface):
             return False
         else:
             logging.info(f"{self.robot_name} Found path with {len(path)} waypoints, moving...")
+
+        # Unwrap path to ensure shortest angular distance between waypoints
+        # path = unwrap_path_waypoints(path)
 
         if visualise:
             self.motion_planner.vis_path(self.robot_name, path)
@@ -218,3 +247,25 @@ def to_canonical_config(config, tol=0, ignore_joints=(False,) *6):
             config[i] += 2 * np.pi
 
     return config
+
+# def unwrap_path_waypoints(path):
+#     """
+#     Post-processes a path to handle joint wrapping. For each waypoint, it ensures
+#     the joint values are numerically close to the previous waypoint's values by
+#     adding/subtracting 2*pi where appropriate.
+#     """
+#     if not path or len(path) < 2:
+#         return path
+
+#     unwrapped_path = [path[0]]
+#     previous_q = np.array(path[0])
+
+#     for i in range(1, len(path)):
+#         current_q = np.array(path[i])
+#         diff = current_q - previous_q
+#         # Check for jumps greater than pi and adjust
+#         current_q[diff > np.pi] -= 2 * np.pi
+#         current_q[diff < -np.pi] += 2 * np.pi
+#         unwrapped_path.append(current_q.tolist())
+#         previous_q = current_q
+#     return unwrapped_path
