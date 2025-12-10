@@ -1,13 +1,12 @@
 import io
+import logging
+import numpy as np
 from PIL import Image
 from klampt.math import se3
 from matplotlib import pyplot as plt
-from motion_planning.geometry_and_transforms import GeometryAndTransforms
-import numpy as np
-from ur_lab.camera.configurations_and_params import color_camera_intrinsic_matrix
-import logging
 
-from motion_planning.motion_planner import MotionPlanner
+from clair_robotics_stack.camera.configurations_and_params import color_camera_intrinsic_matrix
+from clair_robotics_stack.planning.motion.geometry_and_transforms import GeometryAndTransforms
 
 
 def project_points_to_image(points, gt: GeometryAndTransforms, robot_name, robot_config,
