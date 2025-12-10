@@ -216,7 +216,6 @@ class AbstractMotionPlanner:
         """
         start_time = time.time()
         path = None
-        print("planning motion...")
         while path is None and time.time() - start_time < max_time:
             planner.planMore(steps_per_iter)
             path = planner.getPath()
@@ -224,7 +223,6 @@ class AbstractMotionPlanner:
         if path:
             path = self._shortcut_path(planner, path, max_iterations=100, max_time=1.0)
 
-        print("planning took ", time.time() - start_time, " seconds.")
         if path is None:
             print("no path found")
         return path
