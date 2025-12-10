@@ -1,4 +1,5 @@
 import sys
+import random
 import time
 from abc import abstractmethod
 
@@ -13,20 +14,17 @@ from klampt.plan import robotplanning
 from klampt.model import ik
 from klampt.math import se3, so3
 from klampt.model import collide
-import os
 
 
 class AbstractMotionPlanner:
     default_attachments = frozendict(ur5e_1=["camera", "gripper"], ur5e_2=["gripper"])
     default_settings = frozendict({  # "type": "lazyrrg*",
-        "type": "rrt*",
-        "bidirectional": False,
-        "connectionThreshold": 30.0,
-        "perturbationRadius": 1.,
-        # "suboptimalityFactor": 1.01,  # only for rrt* and prm*.
-        # Don't use suboptimalityFactor as it's unclear how that parameter works...
-        # seems like it's ignored even in rrt*
-        # "shortcut": True, # only for rrt
+        "type": "sbl",          # Regular RRT allows bidirectional search
+        "bidirectional": True,  # This makes it RRT-Connect (very fast)
+        "perturbationRadius": 3.0, # Larger radius allows faster exploration in open spaces
+        "shortcut": True,       # We rely on our custom shortcutting for quality
+        "restart": True,        # Helps avoid getting stuck in bad branches (reduces outliers)
+        # "suboptimalityFactor": 1.1, # Not relevant for regular RRT
     })
     # Class-level attribute to track initialization
     vis_initialized = False
@@ -201,11 +199,12 @@ class AbstractMotionPlanner:
 
         # before planning, check if a direct path is possible, then no need to plan
         if self._is_direct_path_possible(planner, start_config, goal_config):
-            return [goal_config]
+            # Return just start and goal to let the robot execute a clean moveJ
+            return [start_config, goal_config]
 
         return self._plan(planner, max_time, max_length_to_distance_ratio=max_length_to_distance_ratio)
 
-    def _plan(self, planner: MotionPlan, max_time=15, steps_per_iter=1000, max_length_to_distance_ratio=10):
+    def _plan(self, planner: MotionPlan, max_time=15, steps_per_iter=50, max_length_to_distance_ratio=10):
         """
         find path given a prepared planner, with endpoints already set
         @param planner: MotionPlan object, endpoints already set
@@ -218,17 +217,12 @@ class AbstractMotionPlanner:
         start_time = time.time()
         path = None
         print("planning motion...")
-        while (path is None or self.compute_path_length_to_distance_ratio(path) > max_length_to_distance_ratio) \
-                and time.time() - start_time < max_time:
+        while path is None and time.time() - start_time < max_time:
             planner.planMore(steps_per_iter)
             path = planner.getPath()
         
         if path:
-            print("Path found, attempting to shortcut/optimize...")
-            t0 = time.time()
-            planner.shortcut(100)
-            path = planner.getPath()
-            print(f"Shortcutting took {time.time() - t0:.2f}s")
+            path = self._shortcut_path(planner, path, max_iterations=100, max_time=1.0)
 
         print("planning took ", time.time() - start_time, " seconds.")
         if path is None:
@@ -239,6 +233,42 @@ class AbstractMotionPlanner:
         # implement if\when necessary.
         # robotplanning.plan_to_config supports list of robots and goal configs
         raise NotImplementedError
+
+    def _shortcut_path(self, planner: MotionPlan, path, max_iterations=100, max_time=1.0):
+        """
+        Simple post-processing shortcutting algorithm.
+        Picks two random points on the path and tries to connect them directly.
+        
+        :param max_iterations: Maximum number of shortcut attempts.
+        :param max_time: Maximum time allowed for optimization in seconds.
+        """
+        if not path or len(path) < 3:
+            return path
+
+        # Work on a copy of the path
+        current_path = list(path)
+        space = planner.space
+        start_time = time.time()
+
+        for _ in range(max_iterations):
+            if time.time() - start_time > max_time:
+                break
+
+            if len(current_path) < 3:
+                break
+            
+            # Pick two random indices (idx2 must be at least 2 steps ahead of idx1 to skip a node)
+            idx1 = random.randint(0, len(current_path) - 3)
+            idx2 = random.randint(idx1 + 2, len(current_path) - 1)
+
+            # Check if we can move directly from idx1 to idx2
+            q1 = self.klampt_to_config6d(current_path[idx1])
+            q2 = self.klampt_to_config6d(current_path[idx2])
+            if space.isVisible(q1, q2):
+                # Remove intermediate nodes
+                current_path = current_path[:idx1 + 1] + current_path[idx2:]
+
+        return current_path
 
     @staticmethod
     def config6d_to_klampt(config):
@@ -321,8 +351,8 @@ class AbstractMotionPlanner:
 
         robot.setConfig(current_config)  # return to original motion planner state
 
-        # all collisions is a list of pairs of colliding geometries. Filter only those that contains a name that
-        # ends with "link" and belongs to the robot, and it's not the base link that always collides with the table.
+        # All collisions is a list of pairs of colliding geometries. Filter only those that contains a name that
+        # Ends with "link" and belongs to the robot, and it's not the base link that always collides with the table.
         for g1, g2 in all_collisions:
             if g1.getName().endswith("link") and g1.getName() != "base_link" and g1.robot().getName() == robot_name:
                 return False
@@ -483,5 +513,3 @@ class AbstractMotionPlanner:
     #         self.world.remove(obj)
     #         print(f"Object '{name}' removed from the dictionary and world.")
     #
-
-
