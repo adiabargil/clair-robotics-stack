@@ -63,7 +63,7 @@ class RobotInterfaceWithMP(RobotInterface):
         return self.acceleration * 0.1
 
     def __init__(self, robot_ip, robot_name, motion_palnner: MotionPlanner,
-                 geomtry_and_transofms: GeometryAndTransforms, freq=50):
+                 geomtry_and_transofms: GeometryAndTransforms, freq=50, vis_flag=False):
         super().__init__(robot_ip, freq)
 
         logging_util.setup_logging()
@@ -73,13 +73,14 @@ class RobotInterfaceWithMP(RobotInterface):
         self.gt = geomtry_and_transofms
 
         # Add window name to distinguish between different visualizations
-        if not MotionPlanner.vis_initialized:
-            motion_palnner.visualize(window_name="robots_visualization")
+        if vis_flag:
+            if not MotionPlanner.vis_initialized:
+                motion_palnner.visualize(window_name="robots_visualization")
 
-        self.setTcp([0, 0, 0.150, 0, 0, 0])
+            self.setTcp([0, 0, 0.150, 0, 0, 0])
 
-        motion_palnner.visualize()
-        time.sleep(0.2)
+            motion_palnner.visualize()
+            time.sleep(0.2)
 
     @classmethod
     def build_from_robot_name_and_ip(cls, robot_ip, robot_name):
@@ -193,7 +194,13 @@ class RobotInterfaceWithMP(RobotInterface):
         if visualise:
             self.motion_planner.vis_path(self.robot_name, path)
 
-        self.move_path(path, speed, acceleration)
+        # If the path contains only 2 points (Start -> Goal), it means it's a direct path.
+        # We can execute a simple moveJ instead of following a path.
+        if len(path) == 2:
+            self.moveJ(path[-1], speed=speed, acceleration=acceleration)
+        else:
+            self.move_path(path, speed, acceleration)
+            
         # update the motion planner with the new configuration:
         self.update_mp_with_current_config()
         return True

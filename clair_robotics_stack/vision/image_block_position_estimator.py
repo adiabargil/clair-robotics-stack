@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 from clair_robotics_stack.camera.configurations_and_params import color_camera_intrinsic_matrix
 from clair_robotics_stack.camera.realsense_camera import project_color_pixel_to_depth_pixel
 from clair_robotics_stack.planning.motion.geometry_and_transforms import GeometryAndTransforms
@@ -281,7 +282,7 @@ class ImageBlockPositionEstimator:
         # we will only fill these if return_annotations is True:
         annotated_cropped = []
         annotated = []
-
+        results = []
 
         if detect_on_cropped:
             cropped_images = []

@@ -175,14 +175,14 @@ class ManipulationController2FG(RobotInterfaceWithMP):
 
         if not res:
             if not replan_from_home_if_failed:
-                return
+                return False
 
             logging.warning(f"{self.robot_name} replanning from home, probably couldn't find path"
                             f" from current position")
             self.plan_and_move_home()
             res = self.plan_and_move_to_xyzrz(x, y, start_height, rz)
             if not res:
-                return
+                return False
 
         above_pickup_config = self.getActualQ()
         self.release_grasp()
@@ -200,10 +200,21 @@ class ManipulationController2FG(RobotInterfaceWithMP):
         logging.debug(f"{self.robot_name} grasping and picking up")
         # close gripper:
         self.grasp()
+
+        # Check if object is gripped
+        if not self.is_object_gripped():
+            logging.warning(f"{self.robot_name} Failed to grip object at {x}, {y}!")
+            self.release_grasp()
+            # Move back up to safety
+            self.moveJ(above_pickup_config, speed=self.speed, acceleration=self.acceleration)
+            self.update_mp_with_current_config()
+            return False
+
         # move up:
         self.moveJ(above_pickup_config, speed=self.speed, acceleration=self.acceleration)
         # update the motion planner with the new configuration:
         self.update_mp_with_current_config()
+        return True
 
 
     def put_down(self, x, y, rz, start_height=0.2, replan_from_home_if_failed=True):
