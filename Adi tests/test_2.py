@@ -158,13 +158,17 @@ def get_depth_at_bbox_center(depth_im, bbox) -> Optional[tuple[list[float], floa
 
 
 @app.command()
-def main(run_fixed_points: bool = False) -> None:
+def main(run_fixed_points: bool = False, startup_delay: float = 0.0) -> None:
     """Main robot manipulation workflow with fixed points and vision-based pickup."""
     # --- Initialize robots and components ---
     camera_bot, grasp_bot = setup_robots()
     camera = RealsenseCamera()
     ImPE = ImageBlockPositionEstimator(WORKSPACE_X_LIMS_DEFAULT, WORKSPACE_Y_LIMS_DEFAULT, camera_bot.gt)
     detector = ObjectDetection(classes=CLASSES, min_confidence=0.05)
+
+    if startup_delay > 0:
+        print(f"Waiting for {startup_delay} seconds before starting...")
+        time.sleep(startup_delay)
 
     grasp_bot.move_home(DEFAULT_SPEED, DEFAULT_ACCELERATION)
     camera_bot.move_home(DEFAULT_SPEED, DEFAULT_ACCELERATION)
