@@ -4,7 +4,7 @@
 <!-- UR5e that is closer to the CLAIR lab, this one is at the origin, and rotated -->
 <!-- This way we can keep the robot XY direction convention with KLAMPT -->
   <robot name="ur5e_1" file="ur5e_rob/ur5e_hires.rob" position="0 0 0" rotateZ="0"/>
-  <robot name="ur5e_2" file="ur5e_rob/ur5e_hires.rob" position="-0.76 -1.33 0" rotateRPY="0 0 3.1415926535"/>
+  <robot name="ur5e_2" file="ur5e_rob/ur5e_hires.rob" position="-0.76 -1.31 0" rotateRPY="0 0 3.1415926535"/>
 <!--position of robot 2 should have been -0.765 according to measurement, but fixed after alingment at the lab-->
 
 <!--tables and walls-->
